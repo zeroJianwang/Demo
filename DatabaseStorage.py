@@ -1,11 +1,19 @@
 import pymysql as sql
+from enum import Enum
+
 """all the query result from pysql is tuple[][]"""
+
 LocalDatabaseConfig = {
     'HostName' :'localhost',
     'HostPort' : 3306,
-    'UserName' : 'Ada',
+    'UserName' : 'Tester',
     'Password' : 'ljw123'
 }
+class CommandType(Enum):
+    SHOW_TABLE = 0
+    SELECT = 1
+    INSERT = 2
+    UPDATE = 3
 
 class TableData():
     ''' a data set of database table'''
@@ -28,10 +36,19 @@ class TableData():
         return self.mData[row][col]
 
     def ToInsertSqlString(self,TargetDatabase,TargetTableName):
+        '''organize the data to an insert SQL string'''
+        InsertString = 'Insert into ' + TargetDatabase + '.' + TargetTableName + ' values(\''
         if self.mHeadList == '*':
+            for feildRow in self.mData:
+                for feildColmn in feildRow:
+                    InsertString += str(feildColmn) + '\',\''
+                InsertString = InsertString[0:-3]
+                InsertString += '\'),(\''
+            InsertString = InsertString[0:-3]
+        else:
             pass
-        InsertString = 'Insert into ' + TargetDatabase + '.' + TargetTableName + ' ('
-        pass
+        InsertString = InsertString.replace('\'None\'','null')
+        return InsertString
 
 class MysqlConnector():
     '''class for connect to mysql server'''
@@ -49,6 +66,8 @@ class MysqlConnector():
         QueryString = 'show tables like ' + '\''+ Table + '\''
 
         affected = curser.execute(QueryString)
+        curser.close()
+        database_conn.close()
         if affected == 0:
             return False
         else:
@@ -67,11 +86,23 @@ class MysqlConnector():
 
         affected = curser.execute(QueryString)
         StringCreate = curser.fetchall()#Table creation string should be at row 1 column 2
+        curser.close()
+        database_conn.close()
         if affected > 0:
             return StringCreate[0][1]
         else:
             return 'Query error'
             
+    def Command(self,CommandString, CmdType):
+        '''run a command with no feedback'''
+        database_conn = sql.connect(self.mHost,self.mUser,self.mPassword,self.mDatabaseName)
+        curser = database_conn.cursor()
+        affected = curser.execute(CommandString)
+        if CmdType == CommandType.INSERT or CmdType == CommandType.UPDATE:
+            database_conn.commit()
+        curser.close()
+        database_conn.close()
+
     def GetRowDataCount(self,Table):
         '''Get data row count of the the table'''
         database_conn = sql.connect(self.mHost,self.mUser,self.mPassword,self.mDatabaseName)
@@ -84,6 +115,8 @@ class MysqlConnector():
             raise Exception("affected row should be one")
         
         data = curser.fetchall()
+        curser.close()
+        database_conn.close()
         return data[0][0]
         
     def QueryTable(self,Table,Feilds,Condition = ''):
